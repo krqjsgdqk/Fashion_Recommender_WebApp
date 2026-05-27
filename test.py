@@ -11,8 +11,8 @@ from google import genai
 import requests
 import random
 from datetime import datetime, timedelta
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+# from sklearn.feature_extraction.text import TfidfVectorizer
+# from sklearn.metrics.pairwise import cosine_similarity
 import altair as alt    
 
 #  CẤU HÌNH TRANG & CSS 
@@ -32,25 +32,49 @@ html, body, [class*="css"] {
     max-width: 1400px;
 }
 
+# /*  HERO TITLE  */
+# .hero-title {
+#     font-family: 'Playfair Display', serif;
+#     font-size: clamp(1.5rem, 3.5vw, 2.8rem); 
+#     font-weight: 900;
+#     background: linear-gradient(135deg, #1a1a2e 0%, #c9184a 50%, #ff6b6b 100%);
+#     -webkit-background-clip: text;
+#     -webkit-text-fill-color: transparent;
+#     background-clip: text;
+    
+#     /* 1. Tăng line-height lên một chút cho thoáng */
+#     line-height: 1.4; 
+#     margin-bottom: 0.25rem;
+#     text-align: center;
+    
+#     /* 2. THÊM 2 DÒNG NÀY ĐỂ BẢO VỆ ĐỈNH VÀ CHÂN CHỮ */
+#     padding-top: 16px;    /* Chống mất đỉnh chữ, dấu mũ */
+#     padding-bottom: 12px; /* Chống mất chân các chữ p, g, q */
+# }
+
 /*  HERO TITLE  */
 .hero-title {
     font-family: 'Playfair Display', serif;
-    font-size: clamp(1.5rem, 3.5vw, 2.8rem); 
+    font-size: clamp(1.3rem, 2.2vw, 2.4rem); 
     font-weight: 900;
     background: linear-gradient(135deg, #1a1a2e 0%, #c9184a 50%, #ff6b6b 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     
-    /* 1. Tăng line-height lên một chút cho thoáng */
-    line-height: 1.4; 
+    line-height: 1.35; 
     margin-bottom: 0.25rem;
     text-align: center;
-    
-    /* 2. THÊM 2 DÒNG NÀY ĐỂ BẢO VỆ ĐỈNH VÀ CHÂN CHỮ */
-    padding-top: 16px;    /* Chống mất đỉnh chữ, dấu mũ */
-    padding-bottom: 12px; /* Chống mất chân các chữ p, g, q */
+    padding-top: 16px;    
+    padding-bottom: 12px; 
 }
+
+.keep-together {
+    display: inline-block;
+    white-space: nowrap;
+}
+
+
 .hero-sub {
     font-family: 'DM Sans', sans-serif;
     font-size: 1rem;
@@ -118,9 +142,9 @@ div[data-testid="stImage"] img {
     border-radius: 12px;
 }
 
-/*  TABS  */
+/*  TABS - Tự động bo màu theo theme  */
 div[data-baseweb="tab-list"] {
-    background: #f8f4f0;
+    background: var(--secondary-background-color);
     border-radius: 12px;
     padding: 4px;
     gap: 2px;
@@ -131,14 +155,30 @@ button[data-baseweb="tab"] {
     font-family: 'DM Sans', sans-serif !important;
     font-size: clamp(0.72rem, 1.1vw, 0.9rem) !important;
     font-weight: 500 !important;
-    color: #6b7280 !important;
+    color: var(--text-color) !important; /* Chữ động */
+    opacity: 0.7;
     transition: all 0.2s ease !important;
     padding: 8px 14px !important;
 }
 button[data-baseweb="tab"][aria-selected="true"] {
-    background: white !important;
-    color: #c9184a !important;
+    background: var(--background-color) !important;
+    color: #c9184a !important; /* Giữ màu nhấn thương hiệu */
+    opacity: 1;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+}
+
+/*  COLOR SECTION - Thẻ màu tương thích Dark Mode  */
+.color-guide-card {
+    background: var(--background-color); /* Nền lật màu */
+    border-radius: 16px; padding: 1.25rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06); 
+    border: 1px solid rgba(150, 150, 150, 0.2); 
+    height: 100%;
+}
+.color-guide-card h4 {
+    font-family: 'Playfair Display', serif; font-size: 1.05rem;
+    margin-bottom: 0.75rem; 
+    color: var(--text-color); /* Chữ lật màu */
 }
 
 /*  ALGO MINI PANEL (inside tabs)  */
@@ -582,18 +622,30 @@ def delete_user(username_to_delete):
 def load_data():
     try:
         df = pd.read_csv('Data_Final.csv')
+        df.columns = df.columns.str.lower()
+        
+        column_mapping = {
+            'product_name': 'title', 'productname': 'title', 'name': 'title',
+            'imurl': 'imurl', 'image': 'imurl', 'imageurl': 'imurl'
+        }
+        df = df.rename(columns=column_mapping)
+        
+        if 'imurl' in df.columns:
+            df = df.rename(columns={'imurl': 'imUrl'})
+
         if 'imUrl' not in df.columns: df['imUrl'] = None
         if 'asin' not in df.columns: df['asin'] = [f'SP_{i}' for i in range(len(df))]
-        # Tự động tạo Title nếu thiếu
-        if 'title' not in df.columns: df['title'] = df['asin'].apply(lambda x: f"Sản phẩm {x}")
+            
+        # KHẮC PHỤC: Điền tên nếu CSV có ô bị trống (NaN)
+        if 'title' not in df.columns: 
+            df['title'] = df['asin'].apply(lambda x: f"Sản phẩm {x}")
+        else:
+            df['title'] = df['title'].fillna(df['asin'].apply(lambda x: f"Sản phẩm {x}"))
+            
         return df.drop_duplicates(subset=['asin']).reset_index(drop=True)
-    except Exception:
-        return pd.DataFrame({
-            'asin': [f'SP_{i:03d}' for i in range(80)],
-            'title': [f'Sản phẩm Mẫu {i:03d}' for i in range(80)],
-            'score': 5.0,
-            'imUrl': None 
-        })
+    except Exception as e:
+        st.error(f"Lỗi đọc CSV: {e}")
+        return pd.DataFrame({'asin': [], 'title': [], 'score': [], 'imUrl': []})
 
 @st.cache_data
 def calculate_popular_items(df, percentile=0.85):
@@ -608,7 +660,9 @@ def calculate_popular_items(df, percentile=0.85):
         (m / (qualified['v'] + m)) * C
     )
     popular = qualified.sort_values('score', ascending=False)
-    return popular.merge(df[['asin','imUrl']].drop_duplicates('asin'), on='asin', how='left')
+    
+    # BẢN VÁ LỖI: Thêm 'title' vào danh sách cột khi merge để không bị mất tên
+    return popular.merge(df[['asin', 'title', 'imUrl']].drop_duplicates('asin'), on='asin', how='left')
 
 def run_algorithm(df_raw, model, user_id, top_n):
     t0 = time.time()
@@ -626,18 +680,24 @@ def run_algorithm(df_raw, model, user_id, top_n):
     return res_df, rmse, elapsed
 
 FALLBACK_IMAGES = [
-    "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400&q=80",
-    "https://images.unsplash.com/photo-1434389678278-be43e49e0186?w=400&q=80",
-    "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=400&q=80",
-    "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=400&q=80",
-    "https://images.unsplash.com/photo-1550639525-c97d455acf70?w=400&q=80",
-    "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=400&q=80"
+    "https://images.pexels.com/photos/2983464/pexels-photo-2983464.jpeg",
+    "https://images.pexels.com/photos/1926769/pexels-photo-1926769.jpeg",
+    "https://images.pexels.com/photos/1036623/pexels-photo-1036623.jpeg",
+    "https://images.pexels.com/photos/1462637/pexels-photo-1462637.jpeg",
+    "https://images.pexels.com/photos/837140/pexels-photo-837140.jpeg",
+    "https://images.pexels.com/photos/1375849/pexels-photo-1375849.jpeg",
+    "https://images.pexels.com/photos/934070/pexels-photo-934070.jpeg",
+    "https://images.pexels.com/photos/1126993/pexels-photo-1126993.jpeg",
+    "https://images.pexels.com/photos/2983601/pexels-photo-2983601.jpeg",
+    "https://images.pexels.com/photos/1852381/pexels-photo-1852381.jpeg"
 ]
 
 @st.cache_data
 def build_baseline_model(df):
     """Huấn luyện mô hình Content-Based Filtering 1 lần duy nhất khi khởi động"""
-    # Nếu data không có cột reviewText, dùng title ghép lại làm hồ sơ văn bản
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+    
     text_col = 'reviewText' if 'reviewText' in df.columns else 'title'
     
     item_profiles = df.groupby('asin')[text_col].apply(lambda x: ' '.join(x.astype(str))).reset_index()
@@ -645,6 +705,8 @@ def build_baseline_model(df):
     tfidf = TfidfVectorizer(stop_words='english', max_features=1000)
     tfidf_matrix = tfidf.fit_transform(item_profiles[text_col])
     cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
+    
+    return item_profiles, cosine_sim
     
     return item_profiles, cosine_sim
 
@@ -676,9 +738,11 @@ def toggle_cart(asin):
 @st.cache_data(show_spinner=False)
 def check_image_url(url):
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        # Gửi request thử xem server chứa ảnh còn sống không
-        res = requests.get(url, headers=headers, timeout=1.5, stream=True)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+        }
+        res = requests.get(url, headers=headers, timeout=3.0, stream=True, allow_redirects=True)
         return res.status_code == 200
     except Exception:
         return False
@@ -698,35 +762,95 @@ def get_safe_img(url, asin=""):
         
     return fallback
 
+# def render_product_grid(df_slice, key_prefix, cols=4):
+#     grid = st.columns(cols)
+#     for i, (_, row) in enumerate(df_slice.iterrows()):
+#         asin = str(row['asin'])
+        
+#         img_url = get_safe_img(row.get('imUrl', ''), asin)
+#         score = row.get('score', np.random.uniform(4.0, 5.0))
+        
+#         title = row.get('title', '')
+#         if pd.isna(title) or str(title).strip() in ('', 'nan', 'None'):
+#             title = f"Sản phẩm {asin[-4:]}"
+
+#         with grid[i % cols]:
+#             with st.container(border=True):
+#                 # Loại bỏ việc dùng st.markdown(img_html), thay bằng st.image nguyên bản
+#                 try:
+#                     st.image(img_url, width='stretch')
+#                 except Exception:
+#                     # Chống sập ứng dụng nếu link vượt qua hàm check nhưng vẫn hỏng khi render
+#                     idx = sum(ord(c) for c in str(asin)) % len(FALLBACK_IMAGES)
+#                     st.image(FALLBACK_IMAGES[idx], width='stretch')
+                
+#                 # Render Tên SP và thông tin
+#                 st.markdown(f"<div style='font-family: \"DM Sans\", sans-serif; font-weight: 700; font-size: 0.95rem; color: #1a1a2e; line-height: 1.3; margin-top: 8px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' title='{title}'>{title}</div>", unsafe_allow_html=True)
+#                 st.markdown(f"<div style='font-size: 0.75rem; color: #6b7280; margin-bottom: 4px;'>Mã SP: <b>{asin}</b></div>", unsafe_allow_html=True)
+#                 st.caption(f"Đánh giá: {score:.2f} ⭐")
+                
+#                 in_cart = asin in st.session_state.cart
+#                 btn_label = " Đã thêm" if in_cart else " Thêm vào giỏ"
+#                 st.button(btn_label, key=f"{key_prefix}_{asin}_{i}", on_click=toggle_cart, args=(asin,), width='stretch')
+
 def render_product_grid(df_slice, key_prefix, cols=4):
     grid = st.columns(cols)
     for i, (_, row) in enumerate(df_slice.iterrows()):
         asin = str(row['asin'])
         
-        # Lúc này img_url TRĂM PHẦN TRĂM là link sống
         img_url = get_safe_img(row.get('imUrl', ''), asin)
         score = row.get('score', np.random.uniform(4.0, 5.0))
         
         title = row.get('title', '')
         if pd.isna(title) or str(title).strip() in ('', 'nan', 'None'):
-            title = f"Sản phẩm {asin[-4:]}"
+            title = f"Sản phẩm {asin}"
+
+        fallback_idx = sum(ord(c) for c in str(asin)) % len(FALLBACK_IMAGES)
+        fallback_img = FALLBACK_IMAGES[fallback_idx]
 
         with grid[i % cols]:
             with st.container(border=True):
-                # Vì link đã được Python bảo kê, mình dùng HTML đơn giản nhất, không sợ Streamlit chặn
                 img_html = f"""
-                <img src="{img_url}" 
-                     style="width: 100%; height: auto; aspect-ratio: 3/4; object-fit: cover; border-radius: 12px; background: #f3f4f6; display: block;">
+                <div class="lookbook-img-wrap" style="aspect-ratio: 3/4; overflow: hidden; border-radius: 12px; margin-bottom: 8px;">
+                    <img src="{img_url}" 
+                         onerror="this.onerror=null;this.src='{fallback_img}';" 
+                         style="width: 100%; height: 100%; object-fit: cover; background-color: var(--secondary-background-color);" 
+                         alt="Hình ảnh sản phẩm">
+                </div>
                 """
                 st.markdown(img_html, unsafe_allow_html=True)
                 
-                st.markdown(f"<div style='font-family: \"DM Sans\", sans-serif; font-weight: 700; font-size: 0.95rem; color: #1a1a2e; line-height: 1.3; margin-top: 8px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' title='{title}'>{title}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='font-size: 0.75rem; color: #6b7280; margin-bottom: 4px;'>Mã SP: <b>{asin}</b></div>", unsafe_allow_html=True)
+                # BẢN VÁ LỖI TÀNG HÌNH: Dùng var(--text-color) cho tên SP và Mã SP
+                st.markdown(
+                    f"""
+                    <div style='
+                        font-family: "DM Sans", sans-serif; 
+                        font-weight: 700; 
+                        font-size: 0.9rem; 
+                        color: var(--text-color); 
+                        line-height: 1.4; 
+                        height: 2.8em; 
+                        margin-top: 8px; 
+                        margin-bottom: 4px; 
+                        display: -webkit-box; 
+                        -webkit-line-clamp: 2; 
+                        -webkit-box-orient: vertical; 
+                        overflow: hidden; 
+                        text-overflow: ellipsis;' 
+                        title='{title}'>
+                        {title}
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
+                st.markdown(f"<div style='font-size: 0.75rem; color: var(--text-color); opacity: 0.7; margin-bottom: 4px;'>Mã SP: <b style='opacity: 1;'>{asin}</b></div>", unsafe_allow_html=True)
                 st.caption(f"Đánh giá: {score:.2f} ⭐")
                 
                 in_cart = asin in st.session_state.cart
                 btn_label = " Đã thêm" if in_cart else " Thêm vào giỏ"
                 st.button(btn_label, key=f"{key_prefix}_{asin}_{i}", on_click=toggle_cart, args=(asin,), width='stretch')
+
+
 def render_paginated_product_grid(df, key_prefix, items_per_page=8, cols=4):
     """Hàm hiển thị sản phẩm có hỗ trợ phân trang bằng nút Trước/Sau"""
     if df.empty:
@@ -759,7 +883,7 @@ def render_paginated_product_grid(df, key_prefix, items_per_page=8, cols=4):
     col_prev, col_info, col_next = st.columns([1, 2, 1])
     
     with col_prev:
-        if st.button(" Trước", key=f"{key_prefix}_prev", use_container_width=True, disabled=(st.session_state[page_key] == 0)):
+        if st.button(" Trước", key=f"{key_prefix}_prev", width='stretch', disabled=(st.session_state[page_key] == 0)):
             st.session_state[page_key] -= 1
             st.rerun()
             
@@ -767,7 +891,7 @@ def render_paginated_product_grid(df, key_prefix, items_per_page=8, cols=4):
         st.markdown(f"<div style='text-align: center; margin-top: 8px; font-weight: 600; color: #6b7280;'>Trang {st.session_state[page_key] + 1} / {total_pages}</div>", unsafe_allow_html=True)
         
     with col_next:
-        if st.button("Sau ", key=f"{key_prefix}_next", use_container_width=True, disabled=(st.session_state[page_key] == total_pages - 1)):
+        if st.button("Sau ", key=f"{key_prefix}_next", width='stretch', disabled=(st.session_state[page_key] == total_pages - 1)):
             st.session_state[page_key] += 1
             st.rerun()
 
@@ -855,44 +979,47 @@ def calculate_size(h, w):
 #  OCCASION DATA 
 OCCASION_IMAGES = {
     "Đi làm / Văn phòng": [
-        "https://images.pexels.com/photos/3760854/pexels-photo-3760854.jpeg",
-        "https://images.pexels.com/photos/1205033/pexels-photo-1205033.jpeg",
-        "https://images.pexels.com/photos/733872/pexels-photo-733872.jpeg",
-        "https://images.pexels.com/photos/935985/pexels-photo-935985.jpeg",
-        "https://images.pexels.com/photos/1036623/pexels-photo-1036623.jpeg",
-        "https://images.pexels.com/photos/1181686/pexels-photo-1181686.jpeg",
-        "https://images.pexels.com/photos/3756679/pexels-photo-3756679.jpeg",
-        "https://images.pexels.com/photos/3760610/pexels-photo-3760610.jpeg",
+        "https://images.unsplash.com/photo-1487222477894-8943e31ef7b2?w=400&q=80",
+        "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=400&q=80",
+        "https://images.unsplash.com/photo-1615349719958-8e6381dd2f3e?w=400&q=80",
+        "https://images.unsplash.com/photo-1774850235906-f5eaafb425ac?w=400&q=80",
+        "https://images.unsplash.com/photo-1600607686527-6fb886090705?w=400&q=80",
+        "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&q=80",
+        "https://images.unsplash.com/photo-1589156191108-c762ff4b96ab?w=400&q=80",
+        "https://images.unsplash.com/photo-1736939666660-d4c776e0532c?w=400&q=80",
     ],
+
     "Hẹn hò lãng mạn": [
-        "https://images.pexels.com/photos/10803527/pexels-photo-10803527.jpeg",
-        "https://images.pexels.com/photos/4034331/pexels-photo-4034331.jpeg",
-        "https://images.pexels.com/photos/1126993/pexels-photo-1126993.jpeg",
-        "https://images.pexels.com/photos/3775131/pexels-photo-3775131.jpeg",
-        "https://images.pexels.com/photos/1460534/pexels-photo-1460534.jpeg",
-        "https://images.pexels.com/photos/3163014/pexels-photo-3163014.jpeg",
-        "https://images.pexels.com/photos/3206079/pexels-photo-3206079.jpeg",
-        "https://images.pexels.com/photos/4552140/pexels-photo-4552140.jpeg",
+        "https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=400&q=80",
+        "https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?w=400&q=80",
+        "https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=400&q=80",
+        "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=400&q=80",
+        "https://images.unsplash.com/photo-1539008835657-9e8e9680c956?w=400&q=80",
+        "https://images.unsplash.com/photo-1464863979621-258859e62245?w=400&q=80",
+        "https://images.unsplash.com/photo-1510832198440-a52376950479?w=400&q=80",
+        "https://images.unsplash.com/photo-1550639525-c97d455acf70?w=400&q=80",
     ],
+
     "Tiệc / Sự kiện": [
-        "https://images.pexels.com/photos/3125056/pexels-photo-3125056.jpeg",
-        "https://images.pexels.com/photos/2085739/pexels-photo-2085739.jpeg",
-        "https://images.pexels.com/photos/1154189/pexels-photo-1154189.jpeg",
-        "https://images.pexels.com/photos/2788488/pexels-photo-2788488.jpeg",
-        "https://images.pexels.com/photos/3050273/pexels-photo-3050273.jpeg",
-        "https://images.pexels.com/photos/459947/pexels-photo-459947.jpeg",
-        "https://images.pexels.com/photos/1852381/pexels-photo-1852381.jpeg",
-        "https://images.pexels.com/photos/1390599/pexels-photo-1390599.jpeg",
+        "https://images.unsplash.com/photo-1568251188392-ae32f898cb3b?w=400&q=80",
+        "https://images.unsplash.com/photo-1566737236500-c8ac43014a67?w=400&q=80",
+        "https://images.unsplash.com/photo-1568252542512-9fe8fe9c87bb?w=400&q=80",
+        "https://images.unsplash.com/photo-1623580674393-edf6eb7090f8?w=400&q=80",
+        "https://images.unsplash.com/photo-1513201099705-a9746e1e201f?w=400&q=80",
+        "https://images.unsplash.com/photo-1583039949165-96ee24b0d8de?w=400&q=80",
+        "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=400&q=80",
+        "https://images.unsplash.com/photo-1596783074918-c84cb06531ca?w=400&q=80",
     ],
+
     "Đi chơi / Dạo phố": [
-        "https://images.pexels.com/photos/1381556/pexels-photo-1381556.jpeg",
-        "https://images.pexels.com/photos/1844012/pexels-photo-1844012.jpeg",
-        "https://images.pexels.com/photos/2442080/pexels-photo-2442080.jpeg",
-        "https://images.pexels.com/photos/1321485/pexels-photo-1321485.jpeg",
-        "https://images.pexels.com/photos/1231649/pexels-photo-1231649.jpeg",
-        "https://images.pexels.com/photos/1306246/pexels-photo-1306246.jpeg",
-        "https://images.pexels.com/photos/1043474/pexels-photo-1043474.jpeg",
-        "https://images.pexels.com/photos/1937336/pexels-photo-1937336.jpeg",
+        "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400&q=80",
+        "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=400&q=80",
+        "https://images.unsplash.com/photo-1523398002811-999ca8dec234?w=400&q=80",
+        "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=400&q=80",
+        "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=400&q=80",
+        "https://images.unsplash.com/photo-1588117260148-b47818741c74?w=400&q=80",
+        "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=400&q=80",
+        "https://images.unsplash.com/photo-1586396847415-2c76ae7e79fc?w=400&q=80",
     ],
 }
 
@@ -1423,7 +1550,12 @@ def render_floating_chat():
 def login_page():
     col_l, col_c, col_r = st.columns([1, 2, 1])
     with col_c:
-        st.markdown('<div class="hero-title">HỆ THỐNG GỢI Ý SẢN PHẨM SÀN THƯƠNG MẠI ĐIỆN TỬ THỜI TRANG</div>', unsafe_allow_html=True)
+        st.markdown('''
+        <div class="hero-title">
+            <span class="keep-together">HỆ THỐNG GỢI Ý</span> <span class="keep-together">SẢN PHẨM</span><br>
+            <span class="keep-together">SÀN THƯƠNG MẠI ĐIỆN TỬ</span> <span class="keep-together">THỜI TRANG</span>
+        </div>
+        ''', unsafe_allow_html=True)
         st.markdown('<div class="hero-sub">Cá nhân hóa phong cách của bạn</div>', unsafe_allow_html=True)
 
         tab_login, tab_register = st.tabs([" Đăng nhập", " Đăng ký"])
@@ -1681,15 +1813,14 @@ def admin_dashboard(df_raw):
         #  1. CONTENT-BASED 
         if "Content-Based" in algo_choice:
             st.markdown("### 1. Mô hình Gợi ý Dựa trên Nội dung (Content-Based)")
-            st.info(" **Nguyên lý hoạt động:** Thuật toán sử dụng **TF-IDF** để biến đổi văn bản (tên, đánh giá sản phẩm) thành các vector toán học. Sau đó dùng **Cosine Similarity** để đo góc lệch giữa các vector. Góc càng nhỏ, sản phẩm càng giống nhau.")
-            
+            st.info(" **Nguyên lý hoạt động:** Thuật toán này xây dựng hồ sơ đặc trưng cho từng sản phẩm dựa trên mô tả, danh mục, và các thuộc tính khác. Khi người dùng xem một sản phẩm, AI sẽ so sánh hồ sơ của nó với các sản phẩm khác để tìm ra những món hàng có đặc trưng tương tự nhất.")            
             with st.spinner("Đang nạp Ma trận Vector (Chạy ngầm)..."):
                 item_profiles, cosine_sim = build_baseline_model(df_raw)
                 
             col_search, col_res = st.columns([1, 2])
             
             with col_search:
-                # 🛠 SỬ DỤNG FORM ĐỂ GOM NHÓM THAO TÁC (CHỐNG RERUN LIÊN TỤC)
+                #  SỬ DỤNG FORM ĐỂ GOM NHÓM THAO TÁC (CHỐNG RERUN LIÊN TỤC)
                 with st.form("form_content_based"):
                     st.markdown("** Cấu hình Tham số**")
                     all_asins = df_raw['asin'].unique().tolist()
@@ -1934,7 +2065,6 @@ def user_dashboard(df_raw):
                 st.success(" Hoàn thành!")
             st.divider()
 
-        # PHẦN NÀY AI CŨNG THẤY (Giỏ hàng & Đăng xuất)
         cart_n = len(st.session_state.cart)
         st.markdown(f"###  Giỏ hàng &nbsp; <span class='cart-badge'>{cart_n}</span>", unsafe_allow_html=True)
         if st.session_state.cart:
@@ -1952,7 +2082,12 @@ def user_dashboard(df_raw):
             st.rerun()
 
     #  HEADER USER 
-    st.markdown('<div class="hero-title"> HỆ THỐNG GỢI Ý SẢN PHẨM SÀN THƯƠNG MẠI ĐIỆN TỬ THỜI TRANG</div>', unsafe_allow_html=True)
+    st.markdown('''
+    <div class="hero-title">
+        <span class="keep-together">HỆ THỐNG GỢI Ý</span> <span class="keep-together">SẢN PHẨM</span><br>
+        <span class="keep-together">SÀN THƯƠNG MẠI ĐIỆN TỬ</span> <span class="keep-together">THỜI TRANG</span>
+    </div>
+    ''', unsafe_allow_html=True)
     st.markdown('<div class="hero-sub">Trung tâm Trải nghiệm Thời trang Cá nhân hóa</div>', unsafe_allow_html=True)
 
     #  ALGO RESULT BANNER 
@@ -2116,12 +2251,23 @@ def user_dashboard(df_raw):
             'imUrl': imgs, 'score': 4.9,
         })
         st.markdown(f"####  Outfit chuẩn cho: **{dip}**")
+        
         d_cols = st.columns(4)
         for i, (_, row) in enumerate(occ_df.iterrows()):
             with d_cols[i % 4]:
                 with st.container(border=True):
-                    try: st.image(row['imUrl'], width='stretch')
-                    except Exception: st.image(f"https://picsum.photos/seed/{i*11}/400/500", width='stretch')
+                    
+                    # BẢN VÁ: Render ảnh bằng HTML thuần + Fallback onerror
+                    img_html = f"""
+                    <div class="lookbook-img-wrap" style="aspect-ratio: 3/4; overflow: hidden; border-radius: 12px; margin-bottom: 8px;">
+                        <img src="{row['imUrl']}" 
+                             onerror="this.onerror=null;this.src='https://loremflickr.com/400/500/fashion?lock={i+50}';" 
+                             style="width: 100%; height: 100%; object-fit: cover; background-color: #f3f4f6;" 
+                             alt="Hình ảnh dịp {dip}">
+                    </div>
+                    """
+                    st.markdown(img_html, unsafe_allow_html=True)
+                    
                     st.markdown(f'<div class="occasion-chip">{dip}</div>', unsafe_allow_html=True)
                     in_cart = row['asin'] in st.session_state.cart
                     st.button(" Đã thêm" if in_cart else " Thêm", key=f"occ_{row['asin']}", on_click=toggle_cart, args=(row['asin'],), width='stretch')
@@ -2130,7 +2276,6 @@ def user_dashboard(df_raw):
             st.markdown("")
             st.markdown(f"#### Gợi ý thêm từ thuật toán ({st.session_state.algo_results['model'].split('(')[0].strip()})")
             render_product_grid(st.session_state.algo_df.head(4), "t4_algo")
-
     # Nội dung Tab 5
     with t5:
         algo_mini_panel()
